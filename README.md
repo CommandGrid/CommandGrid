@@ -12,6 +12,112 @@ Part of a three-service system:
 
 ---
 
+## Getting started
+
+### Prerequisites
+
+- **Go 1.25+** (or [Nix](https://nixos.org/) — each repo has a `flake.nix`)
+- **Docker** (Docker Desktop on Mac, Docker Engine on Linux/Pi)
+- All three repos cloned as siblings:
+
+```
+~/projects/          # or wherever you keep things
+├── control-plane/   # this repo
+├── llm-proxy/
+└── sandbox-image/
+```
+
+### Quick setup (automated)
+
+There's a setup script that builds everything and walks you through credential config:
+
+```bash
+cd control-plane
+./setup.sh
+```
+
+It builds all three services, prompts for your Anthropic API key, and drops a ready-to-run hello-world example in `my-first-sandbox/`.
+
+### Manual setup
+
+If you'd rather do it yourself:
+
+```bash
+# 1. Build the LLM proxy
+cd ../llm-proxy
+make build
+
+# 2. Build the sandbox container image
+cd ../sandbox-image
+make image-local
+
+# 3. Build the control plane
+cd ../control-plane
+make build
+```
+
+### Adding credentials
+
+The control plane stores secrets in `~/.config/control-plane/secrets/`. Add them by name — these names are what you reference in `sandbox.toml`.
+
+```bash
+# LLM key — will be proxied, never enters the sandbox
+./build/control-plane secrets add --name anthropic_key --value "sk-ant-api03-..."
+
+# Direct-inject secrets — these go straight into the sandbox as env vars
+./build/control-plane secrets add --name github_token --value "ghp_..."
+
+# Verify
+./build/control-plane secrets list
+```
+
+Secret names here must match the `[secrets.<name>]` keys in your `sandbox.toml`. The control plane looks them up by name when booting a sandbox.
+
+### Hello world
+
+The `examples/hello-world/` directory has a minimal setup that makes a single Anthropic API call through the proxy. It proves the full flow works end to end.
+
+```bash
+# terminal 1 — start the proxy
+../llm-proxy/build/llm-proxy -addr :8090
+
+# terminal 2 — boot the sandbox
+cd examples/hello-world
+../../build/control-plane up --name hello-world
+```
+
+Or just run the all-in-one script:
+
+```bash
+cd examples/hello-world
+./run.sh
+```
+
+What this does:
+
+1. The control plane reads `sandbox.toml`, sees `anthropic_key` is `mode = "proxy"`
+2. Generates a session token, registers it with the proxy (real key stays on host)
+3. Creates a Docker container with `ANTHROPIC_API_KEY=session-<token>` and `ANTHROPIC_BASE_URL=http://host.docker.internal:8090`
+4. The container's `agent.sh` calls the Anthropic API using those env vars
+5. The request hits the proxy, which swaps the token for the real key and forwards to Anthropic
+6. Claude responds with "Hello world"
+
+The real API key never enters the container.
+
+### What happens inside the sandbox
+
+When a proxied secret is configured, the control plane injects two env vars per provider:
+
+| Provider | API key env var | Base URL env var |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` (session token) | `ANTHROPIC_BASE_URL` (proxy URL) |
+| OpenAI | `OPENAI_API_KEY` (session token) | `OPENAI_BASE_URL` (proxy URL) |
+| Ollama | `OLLAMA_API_KEY` (session token) | `OLLAMA_HOST` (proxy URL) |
+
+This means standard SDKs (the Anthropic Python SDK, OpenAI Python SDK, etc.) work out of the box — they read those env vars and automatically route through the proxy. No code changes needed in the agent.
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -231,6 +337,12 @@ control-plane/
 │   │   └── unikraft.go                  # Unikraft Cloud API backend
 │   └── orchestrator/
 │       └── orchestrator.go              # boot sequence coordination
+├── examples/
+│   └── hello-world/
+│       ├── sandbox.toml                 # minimal config for hello-world
+│       ├── agent.sh                     # curl-based Anthropic API call
+│       └── run.sh                       # all-in-one runner
+├── setup.sh                             # bootstraps all three repos
 ├── sandbox.toml.example
 ├── e2e_test.sh
 ├── Makefile

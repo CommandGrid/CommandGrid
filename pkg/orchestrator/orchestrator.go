@@ -167,6 +167,8 @@ func (o *Orchestrator) resolveSecrets() (env map[string]string, sessionTokens ma
 	env = make(map[string]string)
 	sessionTokens = make(map[string]string)
 
+	proxyBaseURL := "http://host.docker.internal" + o.proxyAddr
+
 	for name, secretCfg := range o.cfg.Secrets {
 		switch secretCfg.Mode {
 		case "inject":
@@ -187,6 +189,17 @@ func (o *Orchestrator) resolveSecrets() (env map[string]string, sessionTokens ma
 
 			// The sandbox gets the session token as its "API key".
 			env[secretCfg.EnvVar] = token
+
+			// Set the provider-specific base URL so SDKs route through the proxy
+			// instead of hitting the real provider directly with a session token.
+			switch secretCfg.Provider {
+			case "anthropic":
+				env["ANTHROPIC_BASE_URL"] = proxyBaseURL
+			case "openai":
+				env["OPENAI_BASE_URL"] = proxyBaseURL
+			case "ollama":
+				env["OLLAMA_HOST"] = proxyBaseURL
+			}
 
 			// Also set SESSION_TOKEN and SESSION_ID for the entrypoint.
 			env["SESSION_TOKEN"] = token

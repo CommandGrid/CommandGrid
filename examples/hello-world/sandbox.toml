@@ -1,0 +1,29 @@
+# Hello World — minimal sandbox config for testing the control plane.
+#
+# This runs a simple shell script that makes one Anthropic API call
+# through the llm-proxy, proving the full credential proxying flow works.
+
+sandbox_mode = "docker"
+image = "sandbox-image:latest"
+
+[proxy]
+addr = ":8090"
+
+[agent]
+command = "bash"
+args = ["/workspace/agent.sh"]
+user = "root"           # hello-world runs as root for simplicity
+workdir = "/workspace"
+
+# The Anthropic key is proxied — the sandbox never sees the real key.
+# It gets a session token instead, and ANTHROPIC_BASE_URL is set to
+# point at the llm-proxy so the API call routes through it.
+[secrets.anthropic_key]
+mode = "proxy"
+env_var = "ANTHROPIC_API_KEY"
+provider = "anthropic"
+
+# Mount this directory into the sandbox so agent.sh is available.
+[[shared_dirs]]
+host_path = "."
+guest_path = "/workspace"
