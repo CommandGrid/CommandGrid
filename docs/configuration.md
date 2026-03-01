@@ -9,7 +9,7 @@ All sandbox configuration lives in a single `sandbox.yaml` file. CommandGrid rea
 sandbox_mode = "docker"    # "docker", "fly", or "unikraft"
 
 # Required. Container image or VM image reference.
-image = "RootFS:latest"
+image = "rootfs:latest"
 
 # LLM proxy configuration.
 [proxy]
@@ -172,7 +172,7 @@ If validation fails, the `up` command exits before provisioning.
 
 ```yaml
 sandbox_mode = "docker"
-image = "RootFS:latest"
+image = "rootfs:latest"
 
 [proxy]
 addr = ":8090"
@@ -195,7 +195,7 @@ guest_path = "/workspace"
 
 ```yaml
 sandbox_mode = "fly"
-image = "ghcr.io/yourorg/RootFS:latest"
+image = "ghcr.io/yourorg/rootfs:latest"
 
 [proxy]
 addr = ":8090"

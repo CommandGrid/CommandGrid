@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -344,7 +345,15 @@ func (o *Orchestrator) registerProxySession(token, provider, apiKey, upstreamURL
 	}
 
 	url := fmt.Sprintf("http://localhost%s/v1/sessions", o.proxyAddr)
-	resp, err := o.httpClient.Post(url, "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if adminToken := os.Getenv("GHOSTPROXY_ADMIN_TOKEN"); adminToken != "" {
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+	}
+	resp, err := o.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("posting to proxy: %w", err)
 	}
@@ -364,6 +373,9 @@ func (o *Orchestrator) revokeProxySession(token string) error {
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
+	}
+	if adminToken := os.Getenv("GHOSTPROXY_ADMIN_TOKEN"); adminToken != "" {
+		req.Header.Set("Authorization", "Bearer "+adminToken)
 	}
 
 	resp, err := o.httpClient.Do(req)

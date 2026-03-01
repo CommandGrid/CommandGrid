@@ -10,7 +10,6 @@ import (
 	"control-plane/pkg/config"
 	"control-plane/pkg/orchestrator"
 	"control-plane/pkg/provisioner"
-	"control-plane/pkg/secrets"
 )
 
 // Up implements the "up" subcommand: start a sandbox.
@@ -18,7 +17,8 @@ func Up(args []string, logger *log.Logger) error {
 	fs := flag.NewFlagSet("up", flag.ExitOnError)
 	configPath := fs.String("config", "sandbox.yaml", "Path to sandbox.yaml")
 	name := fs.String("name", "sandbox", "Sandbox name")
-	secretsDir := fs.String("secrets-dir", "", "Path to secrets directory (default: ~/.config/control-plane/secrets)")
+	secretsDir := fs.String("secrets-dir", "", "Path to .env file (env provider; default: .env in cwd)")
+	secretsProvider := fs.String("secrets-provider", "env", "Secret provider: env or bitwarden")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -37,13 +37,7 @@ func Up(args []string, logger *log.Logger) error {
 		}
 	}
 
-	sDir := *secretsDir
-	if sDir == "" {
-		home, _ := userHomeDir()
-		sDir = home + "/.config/control-plane/secrets"
-	}
-
-	store, err := secrets.NewFileStore(sDir)
+	store, err := openSecretStore(*secretsProvider, *secretsDir)
 	if err != nil {
 		return fmt.Errorf("opening secret store: %w", err)
 	}

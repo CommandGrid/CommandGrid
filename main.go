@@ -21,14 +21,18 @@ func main() {
 
 	var err error
 	switch subcommand {
+	case "build":
+		err = cmd.Build(args, logger)
+	case "onboard":
+		err = cmd.Onboard(args, logger)
+	case "run":
+		err = cmd.Run(args, logger)
 	case "up":
 		err = cmd.Up(args, logger)
 	case "down":
 		err = cmd.Down(args, logger)
 	case "status":
 		err = cmd.Status(args, logger)
-	case "secrets":
-		err = cmd.Secrets(args, logger)
 	case "serve":
 		err = cmd.Serve(args, logger)
 	case "help", "--help", "-h":
@@ -53,10 +57,12 @@ Usage:
   control-plane <command> [options]
 
 Commands:
+  build     Build local source artifacts (GhostProxy, RootFS image, CommandGrid)
+  onboard   Bootstrap local YAML config and secrets provider
+  run       Preflight, start proxy, and run sandbox
   up        Start a sandbox
   down      Stop and destroy a sandbox
   status    Show sandbox status
-  secrets   Manage the secret store (add, rm, list)
   serve     Run as an HTTP server (for api-gateway integration)
   help      Show this help message
 

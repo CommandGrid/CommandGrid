@@ -32,13 +32,13 @@ secrets:
     provider: anthropic
     # upstream_url: https://api.anthropic.com  # Optional override
 
-  github_token:
-    mode: inject
-    env_var: GITHUB_TOKEN
+  # github_token:
+  #   mode: inject
+  #   env_var: GITHUB_TOKEN
 
-  ssh_key:
-    mode: inject
-    env_var: SSH_PRIVATE_KEY
+  # ssh_key:
+  #   mode: inject
+  #   env_var: SSH_PRIVATE_KEY
 
 # Shared directories mounted into the sandbox.
 shared_dirs:

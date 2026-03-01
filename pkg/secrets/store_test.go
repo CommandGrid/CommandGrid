@@ -5,96 +5,6 @@ import (
 	"testing"
 )
 
-func TestFileStore_SetAndGet(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
-
-	if err := store.Set("anthropic_key", "sk-ant-123"); err != nil {
-		t.Fatalf("Set() error = %v", err)
-	}
-
-	got, err := store.Get("anthropic_key")
-	if err != nil {
-		t.Fatalf("Get() error = %v", err)
-	}
-	if got != "sk-ant-123" {
-		t.Errorf("Get() = %q, want %q", got, "sk-ant-123")
-	}
-}
-
-func TestFileStore_GetNotFound(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
-
-	_, err = store.Get("nonexistent")
-	if err == nil {
-		t.Fatal("Get() expected error for nonexistent secret")
-	}
-}
-
-func TestFileStore_Delete(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
-
-	_ = store.Set("key", "value")
-	_ = store.Delete("key")
-
-	_, err = store.Get("key")
-	if err == nil {
-		t.Fatal("Get() expected error after Delete()")
-	}
-}
-
-func TestFileStore_List(t *testing.T) {
-	dir := t.TempDir()
-	store, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
-
-	_ = store.Set("a", "1")
-	_ = store.Set("b", "2")
-
-	names, err := store.List()
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	if len(names) != 2 {
-		t.Fatalf("List() returned %d names, want 2", len(names))
-	}
-}
-
-func TestFileStore_Persistence(t *testing.T) {
-	dir := t.TempDir()
-
-	// Write a secret.
-	store1, _ := NewFileStore(dir)
-	_ = store1.Set("persistent", "value123")
-
-	// Reopen the store and verify.
-	store2, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatalf("NewFileStore() reopen error = %v", err)
-	}
-
-	got, err := store2.Get("persistent")
-	if err != nil {
-		t.Fatalf("Get() error = %v", err)
-	}
-	if got != "value123" {
-		t.Errorf("Get() = %q, want %q", got, "value123")
-	}
-}
-
 func TestEnvStore_GetFromEnv(t *testing.T) {
 	t.Setenv("SECRET_MY_KEY", "env-value")
 
@@ -163,23 +73,11 @@ func TestGenerateSessionToken(t *testing.T) {
 	}
 }
 
-// TestStoreInterface verifies both implementations satisfy the Store interface.
+// TestStoreInterface verifies implementations satisfy the Store interface.
 func TestStoreInterface(t *testing.T) {
-	dir := t.TempDir()
-	var _ Store = mustFileStore(t, dir)
-
 	envStore, err := NewEnvStore("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var _ Store = envStore
-}
-
-func mustFileStore(t *testing.T, dir string) *FileStore {
-	t.Helper()
-	s, err := NewFileStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s
 }

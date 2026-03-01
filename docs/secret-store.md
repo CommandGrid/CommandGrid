@@ -18,40 +18,26 @@ type Store interface {
 ```mermaid
 flowchart LR
     Orch[Orchestrator] --> IF{secrets.Store}
-    IF -->|local dev| FS[FileStore<br/>JSON file]
-    IF -->|CI / containers| ES[EnvStore<br/>env vars]
+    IF -->|default| ES[EnvStore<br/>SECRET_* env / .env]
+    IF -->|local dev| BW[BitwardenStore<br/>bw CLI]
     IF -->|multi-tenant| DS[DelegatedStore<br/>AWS SM / Vault]
 
     style IF fill:#333,stroke:#999,color:#fff
-```
-
-### FileStore
-
-Source: `pkg/secrets/store.go`
-
-The default for local development. A JSON file in a user-only directory.
-
-```
-~/.config/CommandGrid/secrets/
-└── secrets.json     # {"name": "value", ...}
-```
-
-- Directory: `0700` permissions
-- File: `0600` permissions
-- Thread-safe (`sync.RWMutex`)
-- Persists on every Set/Delete
-
-```go
-store, err := secrets.NewFileStore("~/.config/CommandGrid/secrets")
 ```
 
 ### EnvStore
 
 Source: `pkg/secrets/env.go`
 
-Read-only backend that reads secrets from environment variables or a `.env` file. Good for CI pipelines and containerized deployments.
+Default backend. Reads secrets from environment variables or a `.env` file. Good for local dev and CI pipelines.
 
-Secret names are uppercased and prefixed. `Get("anthropic_key")` checks `SECRET_ANTHROPIC_KEY`.
+```bash
+CommandGrid up   # env is default
+# or explicitly:
+CommandGrid up --secrets-provider env
+```
+
+Secret names are uppercased and prefixed. `Get("anthropic_key")` checks `SECRET_ANTHROPIC_KEY`. With a `.env` file, use the secret name as the key (e.g. `anthropic_key=sk-ant-...`).
 
 ```go
 store, err := secrets.NewEnvStore("/path/to/.env", "SECRET_")
@@ -96,18 +82,24 @@ Features:
 - **Read-only** -- `Set`, `Delete`, `List` return errors. Customers manage their own vaults.
 - **Customer-scoped** -- each customer's profile can define a different `SecretsProviderConfig`
 
-## CLI commands
+See [secrets-local-dev.md](secrets-local-dev.md) for a step-by-step guide on Bitwarden, env vars, and local development.
+
+### BitwardenStore
+
+Source: `pkg/secrets/bitwarden.go`
+
+For developer machines that keep secrets in Bitwarden, CommandGrid can resolve
+secrets with:
 
 ```bash
-# Add a secret (FileStore only)
-CommandGrid secrets add --name anthropic_key --value "sk-ant-..."
-
-# List secret names
-CommandGrid secrets list
-
-# Remove a secret
-CommandGrid secrets rm --name old_key
+CommandGrid run --secrets-provider bitwarden
 ```
+
+Notes:
+- Read-only store (`Set`, `Delete`, `List` are unsupported)
+- Requires `bw` CLI installed and authenticated/unlocked
+- Uses `BW_SESSION` when present
+- Resolves item values from `login.password` first, then `notes`
 
 ## How the orchestrator uses it
 
@@ -118,11 +110,3 @@ During `Up`, the orchestrator calls `store.Get(secretName)` for each secret in `
 
 If any `Get` fails, the `up` command aborts before provisioning.
 
-## Future: age encryption
-
-The FileStore currently uses plaintext JSON. The planned upgrade:
-
-1. Generate an `age` keypair at init time
-2. Encrypt each value before writing to JSON
-3. Decrypt on read
-4. Interface stays the same -- encryption is transparent

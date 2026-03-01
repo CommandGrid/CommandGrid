@@ -90,20 +90,26 @@ cd ../RootFS && make image-local
 cd ../CommandGrid && make build
 ```
 
-### Adding credentials
+### Source-first local flow
 
-CommandGrid stores secrets in `~/.config/CommandGrid/secrets/`. Add them by name -- these names are what you reference in `sandbox.yaml`.
+Use the built-in command flow for local development:
 
 ```bash
-# LLM key -- will be proxied, never enters the sandbox
-./build/CommandGrid secrets add --name anthropic_key --value "sk-ant-api03-..."
+# Build required local artifacts from source
+./build/control-plane build
 
-# Direct-inject secrets -- these go straight into the sandbox as env vars
-./build/CommandGrid secrets add --name github_token --value "ghp_..."
+# Bootstrap local YAML config and choose secret provider
+./build/control-plane onboard --secrets-provider bitwarden
 
-# Verify
-./build/CommandGrid secrets list
+# Preflight, start GhostProxy if needed, and run sandbox
+./build/control-plane run --config sandbox.yaml --name dev-agent
 ```
+
+`onboard` writes local config/profile files under `~/.config/control-plane/`.
+
+### Adding credentials
+
+Secrets come from env vars or a `.env` file (default). Use `SECRET_` + uppercase name: `SECRET_ANTHROPIC_KEY`, `SECRET_GITHUB_TOKEN`, etc. Or create a `.env` file with keys matching `sandbox.yaml` secret names (e.g. `anthropic_key=sk-ant-...`). See [docs/secrets-local-dev.md](docs/secrets-local-dev.md).
 
 ### Hello world
 
@@ -211,7 +217,7 @@ Standard SDKs read these env vars and route through the proxy automatically. No 
 
 ```yaml
 sandbox_mode = "docker"           # "docker", "fly", or "unikraft"
-image = "RootFS:latest"
+image = "rootfs:latest"
 
 [proxy]
 addr = ":8090"
@@ -308,8 +314,8 @@ The secret store is pluggable. Multiple backends implement the same interface:
 ```mermaid
 flowchart LR
     CP[CommandGrid] --> IF{secrets.Store}
-    IF -->|local dev| FS[FileStore<br/>~/.config/.../secrets.json]
-    IF -->|CI / env| ES[EnvStore<br/>SECRET_* env vars]
+    IF -->|default| ES[EnvStore<br/>SECRET_* env / .env]
+    IF -->|local dev| BW[BitwardenStore<br/>bw CLI]
     IF -->|customer vault| DS[DelegatedStore<br/>AWS SM / Vault]
 
     style IF fill:#333,stroke:#999,color:#fff
@@ -317,8 +323,8 @@ flowchart LR
 
 | Backend | When to use | Set/Delete | Persistence |
 |---|---|---|---|
-| `FileStore` | Local dev, Pi | Yes | JSON file, 0600 perms |
-| `EnvStore` | CI pipelines, containers | No (read-only at runtime) | Env vars / .env file |
+| `EnvStore` | Default. Local dev, CI | No (read-only) | Env vars / .env file |
+| `BitwardenStore` | Bitwarden vault | No (read-only) | Bitwarden via `bw` CLI |
 | `DelegatedStore` | Multi-tenant production | No (customer manages) | AWS Secrets Manager or HashiCorp Vault |
 
 The `DelegatedStore` fetches secrets from a customer's own vault at runtime with a short TTL cache. Customers rotate and manage their own credentials -- CommandGrid never stores them.
@@ -423,21 +429,25 @@ Per-customer configuration for personalization:
 
 ### Managing secrets
 
-```bash
-CommandGrid secrets add --name anthropic_key --value "sk-ant-..."
-CommandGrid secrets add --name github_token --value "ghp_..."
-CommandGrid secrets list
-CommandGrid secrets rm --name old_key
-```
+Use env vars (`SECRET_ANTHROPIC_KEY`, etc.) or a `.env` file. See [docs/secrets-local-dev.md](docs/secrets-local-dev.md).
 
 ### Running sandboxes (CLI)
 
 ```bash
+CommandGrid build                           # source build artifacts
+CommandGrid onboard                         # write local YAML config/profile
+CommandGrid run --name my-agent             # preflight + proxy bootstrap + up
 CommandGrid up --name my-agent              # reads sandbox.yaml
 CommandGrid status                          # list all sandboxes
 CommandGrid status --id <container-id>      # single sandbox
 CommandGrid down --id <container-id>        # stop and destroy
 ```
+
+### Bitwarden secrets mode
+
+Use `--secrets-provider bitwarden` on `run/up/down/status/serve` to resolve
+secrets from Bitwarden via `bw` CLI (expects login/unlock state and optionally
+`BW_SESSION`).
 
 ### Running as a server
 
@@ -467,7 +477,6 @@ CommandGrid/
 │   ├── up.go                        # start a sandbox
 │   ├── down.go                      # stop + destroy
 │   ├── status.go                    # sandbox status / list
-│   ├── secrets.go                   # secrets add/rm/list
 │   ├── serve.go                     # HTTP server mode
 │   └── helpers.go
 ├── pkg/
@@ -475,7 +484,6 @@ CommandGrid/
 │   │   └── config.go                # sandbox.yaml parsing + validation
 │   ├── secrets/
 │   │   ├── iface.go                 # Store interface
-│   │   ├── store.go                 # FileStore (JSON file)
 │   │   ├── env.go                   # EnvStore (env vars / .env file)
 │   │   ├── delegated.go             # DelegatedStore (AWS SM / Vault)
 │   │   └── session.go               # session token generation
