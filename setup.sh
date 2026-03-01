@@ -7,11 +7,12 @@
 #   ../CommandGrid/   (this repo)
 #
 # What it does:
-#   1. Checks prerequisites (Go, Docker)
-#   2. Builds GhostProxy
+#   1. Clones missing sibling repos (GhostProxy, RootFS) into parent folder
+#   2. Checks prerequisites (Go, Docker)
+#   3. Builds GhostProxy
 #   3. Builds the rootfs Docker image
 #   4. Builds control-plane
-#   5. Walks you through adding your Anthropic API key
+#   5. Verifies credentials are configured (.env or Bitwarden)
 #   6. Copies the hello-world example into ./my-first-sandbox/
 
 set -euo pipefail
@@ -34,6 +35,46 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 GHOSTPROXY_DIR="$PARENT_DIR/GhostProxy"
 ROOTFS_DIR="$PARENT_DIR/RootFS"
 CONTROL_PLANE_DIR="$SCRIPT_DIR"
+
+# ─── Clone missing sibling repos ──────────────────────────────────────────────
+
+step "Ensuring workspace layout"
+
+# Derive org from this repo's remote (e.g. git@github.com:Travbz/control-plane.git -> Travbz)
+ORIGIN_URL=""
+if [[ -d "$SCRIPT_DIR/.git" ]]; then
+    ORIGIN_URL=$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || true)
+fi
+if [[ -z "$ORIGIN_URL" ]]; then
+    warn "Not a git repo or no origin; cannot auto-clone. Clone GhostProxy and RootFS manually."
+else
+    # Support both git@ and https:// URLs
+    ORG=""
+    BASE=""
+    if [[ "$ORIGIN_URL" =~ git@github\.com:([^/]+)/ ]]; then
+        ORG="${BASH_REMATCH[1]}"
+        BASE="git@github.com:$ORG"
+    elif [[ "$ORIGIN_URL" =~ https?://[^/]*github\.com/([^/]+)/ ]]; then
+        ORG="${BASH_REMATCH[1]}"
+        BASE="https://github.com/$ORG"
+    fi
+    if [[ -n "$ORG" && -n "$BASE" ]]; then
+        if [[ ! -d "$GHOSTPROXY_DIR" ]]; then
+            log "Cloning GhostProxy (llm-proxy) into $GHOSTPROXY_DIR"
+            git clone "$BASE/llm-proxy.git" "$GHOSTPROXY_DIR"
+        else
+            log "GhostProxy already present at $GHOSTPROXY_DIR"
+        fi
+        if [[ ! -d "$ROOTFS_DIR" ]]; then
+            log "Cloning RootFS (sandbox-image) into $ROOTFS_DIR"
+            git clone "$BASE/sandbox-image.git" "$ROOTFS_DIR"
+        else
+            log "RootFS already present at $ROOTFS_DIR"
+        fi
+    else
+        warn "Could not parse org from origin; clone GhostProxy and RootFS manually."
+    fi
+fi
 
 # ─── Prerequisites ────────────────────────────────────────────────────────────
 
@@ -101,28 +142,47 @@ else
     log "Copied hello-world example to $EXAMPLE_DIR"
 fi
 
-# ─── Store Anthropic API key ─────────────────────────────────────────────────
+# ─── Verify credentials ──────────────────────────────────────────────────────
 
-step "Setting up credentials"
+step "Verifying credentials"
 
 ENV_FILE="$EXAMPLE_DIR/.env"
+HAS_CREDS=false
 
-# Check if key is already in .env or will be set via env.
-if [[ -f "$ENV_FILE" ]] && grep -q "anthropic_key=" "$ENV_FILE" 2>/dev/null; then
-    log "anthropic_key already in .env, skipping"
-elif [[ -n "${SECRET_ANTHROPIC_KEY:-}" ]]; then
-    log "SECRET_ANTHROPIC_KEY already set, skipping"
-else
-    echo -e "${BOLD}Enter your Anthropic API key (starts with sk-ant-):${NC}"
-    read -rsp "> " ANTHROPIC_KEY
-    echo ""
-
-    if [[ -z "$ANTHROPIC_KEY" ]]; then
-        warn "No key entered. Add to .env or export SECRET_ANTHROPIC_KEY before running."
-    else
-        echo "anthropic_key=$ANTHROPIC_KEY" >> "$ENV_FILE"
-        log "Added anthropic_key to $ENV_FILE"
+# .env: must have anthropic_key= with a non-placeholder value
+if [[ -f "$ENV_FILE" ]]; then
+    VAL=$(grep -E "^anthropic_key=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
+    if [[ -n "$VAL" && "$VAL" != "sk-ant-..." && ${#VAL} -gt 20 ]]; then
+        HAS_CREDS=true
+        log "anthropic_key found in $ENV_FILE"
     fi
+fi
+# Or SECRET_ANTHROPIC_KEY env var
+if [[ -n "${SECRET_ANTHROPIC_KEY:-}" && ${#SECRET_ANTHROPIC_KEY} -gt 20 ]]; then
+    HAS_CREDS=true
+    log "SECRET_ANTHROPIC_KEY is set"
+fi
+# Or Bitwarden has anthropic_key (bw must be unlocked)
+if command -v bw &>/dev/null && [[ -n "${BW_SESSION:-}" ]]; then
+    if bw list items --search anthropic_key --session "$BW_SESSION" 2>/dev/null | grep -q '"name":"anthropic_key"'; then
+        HAS_CREDS=true
+        log "anthropic_key found in Bitwarden"
+    fi
+fi
+
+if [[ "$HAS_CREDS" != "true" ]]; then
+    fail "anthropic_key not configured. Add it before running:
+
+  Option 1 (env): Create $ENV_FILE with:
+    anthropic_key=sk-ant-...
+
+  Option 2 (env): Export before running:
+    export SECRET_ANTHROPIC_KEY=\"sk-ant-...\"
+
+  Option 3 (Bitwarden): Add a Login or Secure Note named 'anthropic_key'
+    with your key, then run with --secrets-provider bitwarden
+
+  See docs/secrets-local-dev.md for details."
 fi
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
@@ -132,7 +192,7 @@ step "Setup complete"
 echo -e "
 ${BOLD}What just happened:${NC}
   - Built GhostProxy, rootfs, and control-plane
-  - Added Anthropic API key to my-first-sandbox/.env (or set SECRET_ANTHROPIC_KEY)
+  - Verified credentials (.env or SECRET_ANTHROPIC_KEY)
   - Created my-first-sandbox/ with a ready-to-run example
 
 ${BOLD}To run the hello-world example:${NC}
