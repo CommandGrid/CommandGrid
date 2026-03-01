@@ -36,6 +36,12 @@ func (s *BitwardenStore) Get(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("bitwarden list items failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
+	raw := strings.TrimSpace(string(out))
+	if looksLikeBitwardenUnlockPrompt(raw) {
+		return "", fmt.Errorf(
+			"bitwarden vault is locked; run `export BW_SESSION=\"$(bw unlock --raw)\"` in this shell and retry",
+		)
+	}
 
 	type bwItem struct {
 		Name  string `json:"name"`
@@ -70,6 +76,16 @@ func (s *BitwardenStore) Get(name string) (string, error) {
 		return strings.TrimSpace(selected.Notes), nil
 	}
 	return "", fmt.Errorf("bitwarden item %q has no login.password or notes value", selected.Name)
+}
+
+func looksLikeBitwardenUnlockPrompt(s string) bool {
+	if s == "" {
+		return false
+	}
+	l := strings.ToLower(s)
+	return strings.Contains(l, "master password") ||
+		strings.Contains(l, "vault is locked") ||
+		strings.Contains(l, "you are not logged in")
 }
 
 // Set is unsupported for BitwardenStore.

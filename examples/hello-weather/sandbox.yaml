@@ -1,0 +1,22 @@
+sandbox_mode: docker
+image: rootfs:latest
+
+proxy:
+  addr: ":8090"
+
+agent:
+  command: bash
+  args:
+    - /workspace/agent.sh
+  user: root
+  workdir: /workspace
+
+secrets:
+  anthropic_key:
+    mode: proxy
+    env_var: ANTHROPIC_API_KEY
+    provider: anthropic
+
+shared_dirs:
+  - host_path: .
+    guest_path: /workspace
