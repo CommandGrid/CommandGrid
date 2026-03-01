@@ -95,7 +95,7 @@ type SecretConfig struct {
 	EnvVar string `yaml:"env_var"`
 
 	// Provider is the LLM provider name (only for mode="proxy").
-	// One of: "anthropic", "openai", "ollama".
+	// One of: "anthropic", "openai", "minimax", "ollama".
 	Provider string `yaml:"provider,omitempty"`
 
 	// UpstreamURL is an optional override for the provider API URL.

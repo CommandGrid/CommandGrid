@@ -289,6 +289,8 @@ func (o *Orchestrator) resolveSecrets() (env map[string]string, sessionTokens ma
 				env["ANTHROPIC_BASE_URL"] = proxyBaseURL
 			case "openai":
 				env["OPENAI_BASE_URL"] = proxyBaseURL
+			case "minimax":
+				env["MINIMAX_BASE_URL"] = proxyBaseURL
 			case "ollama":
 				env["OLLAMA_HOST"] = proxyBaseURL
 			}

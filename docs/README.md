@@ -227,6 +227,7 @@ When a proxied secret is configured, CommandGrid injects two env vars per provid
 |---|---|---|
 | Anthropic | `ANTHROPIC_API_KEY` (session token) | `ANTHROPIC_BASE_URL` (proxy URL) |
 | OpenAI | `OPENAI_API_KEY` (session token) | `OPENAI_BASE_URL` (proxy URL) |
+| MiniMax | `MINIMAX_API_KEY` (session token) | `MINIMAX_BASE_URL` (proxy URL) |
 | Ollama | `OLLAMA_API_KEY` (session token) | `OLLAMA_HOST` (proxy URL) |
 
 Standard SDKs read these env vars and route through the proxy automatically. No code changes needed in the agent.

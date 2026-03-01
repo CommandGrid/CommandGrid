@@ -27,6 +27,7 @@ Set `SECRET_` + uppercase secret name. Names use underscores.
 |--------------------------|----------------|
 | `anthropic_key` | `SECRET_ANTHROPIC_KEY` |
 | `openai_key` | `SECRET_OPENAI_KEY` |
+| `minimax_key` | `SECRET_MINIMAX_KEY` |
 | `github_token` | `SECRET_GITHUB_TOKEN` |
 
 ```bash
@@ -42,6 +43,7 @@ Create a `.env` file in your project directory (add to `.gitignore`). Use the **
 # .env - keys must match secret names in sandbox.yaml
 anthropic_key=sk-ant-...
 openai_key=sk-...
+minimax_key=your-minimax-api-key
 github_token=ghp_...
 ```
 
@@ -93,6 +95,7 @@ Use the **exact** secret name from your `sandbox.yaml`. Lowercase with underscor
 |--------------------------|---------------------|
 | `anthropic_key` | `anthropic_key` |
 | `openai_key` | `openai_key` |
+| `minimax_key` | `minimax_key` |
 | `github_token` | `github_token` |
 
 Do **not** use env-style names like `ANTHROPIC_KEY`. The lookup is by item name, not env var.
