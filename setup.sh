@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # setup.sh — Clone all sibling repos and build the agent sandbox system.
 #
-# Run from CommandGrid. Clones GhostProxy, RootFS, ToolCore, FlowSpec, JudgementD, api-gateway.
+# Run from CommandGrid. Clones GhostProxy, RootFS, ToolCore, FlowSpec, JudgementD.
 # Then builds GhostProxy, RootFS, control-plane. No temp files, no credential prompts.
 #
 # Layout after setup:
@@ -11,8 +11,7 @@
 #   ├── RootFS/
 #   ├── ToolCore/
 #   ├── FlowSpec/
-#   ├── JudgementD/
-#   └── api-gateway/
+#   └── JudgementD/
 
 set -euo pipefail
 
@@ -60,7 +59,6 @@ clone_repo "sandbox-image"  "$PARENT_DIR/RootFS"
 clone_repo "ToolCore"      "$PARENT_DIR/ToolCore"
 clone_repo "FlowSpec"      "$PARENT_DIR/FlowSpec"
 clone_repo "JudgementD"    "$PARENT_DIR/JudgementD"
-clone_repo "api-gateway"   "$PARENT_DIR/api-gateway"
 
 log "All repos ready"
 
@@ -95,7 +93,16 @@ step "Setup complete"
 echo -e "
 ${BOLD}Built:${NC} GhostProxy, RootFS image, control-plane
 
-${BOLD}Test it:${NC}
-  cd $SCRIPT_DIR/examples/hello-world
-  $SCRIPT_DIR/build/control-plane run
+${BOLD}Next steps:${NC}
+  1. Set up secrets in .env or Bitwarden (e.g. SECRET_ANTHROPIC_KEY)
+  2. Run onboard to bootstrap config and secrets:
+     $SCRIPT_DIR/build/control-plane onboard --secrets-provider env
+
+  3. Run the hello-world agent:
+     cd $SCRIPT_DIR/examples/hello-world
+     $SCRIPT_DIR/build/control-plane run
+
+  4. Run the hello-weather workflow:
+     cd $PARENT_DIR/FlowSpec/workflows/hello-weather
+     echo '{\"task_id\":\"demo\",\"prompt\":\"quick check\"}' | go run .
 "

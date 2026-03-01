@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"control-plane/pkg/config"
@@ -24,6 +27,7 @@ func Run(args []string, logger *log.Logger) error {
 	secretsDir := fs.String("secrets-dir", "", "Path to .env file (for env provider)")
 	autoBuild := fs.Bool("auto-build", true, "Build required source artifacts before run")
 	detach := fs.Bool("detach", false, "Do not print proxy bootstrap details")
+	reuseProxy := fs.Bool("reuse-proxy", false, "Reuse an already-running GhostProxy instead of restarting it")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -63,14 +67,12 @@ func Run(args []string, logger *log.Logger) error {
 		proxyAddr = ":8090"
 	}
 
-	if !proxyHealthy(proxyAddr) {
-		ghostProxyBin := filepath.Join(devCfg.Paths.GhostProxy, "build", "ghostproxy")
-		if artifacts, artErr := loadArtifactsFile(); artErr == nil && artifacts.Binaries.GhostProxy != "" {
-			ghostProxyBin = artifacts.Binaries.GhostProxy
-		}
-		if err := startProxy(ghostProxyBin, proxyAddr, *detach); err != nil {
-			return err
-		}
+	ghostProxyBin := filepath.Join(devCfg.Paths.GhostProxy, "build", "ghostproxy")
+	if artifacts, artErr := loadArtifactsFile(); artErr == nil && artifacts.Binaries.GhostProxy != "" {
+		ghostProxyBin = artifacts.Binaries.GhostProxy
+	}
+	if err := ensureRunProxy(ghostProxyBin, proxyAddr, *detach, *reuseProxy); err != nil {
+		return err
 	}
 
 	upArgs := []string{
@@ -145,4 +147,89 @@ func startProxy(binPath, proxyAddr string, quiet bool) error {
 		}
 	}
 	return fmt.Errorf("ghostproxy did not become healthy on %s", proxyAddr)
+}
+
+func ensureRunProxy(binPath, proxyAddr string, quiet bool, reuseProxy bool) error {
+	healthy := proxyHealthy(proxyAddr)
+	if healthy && reuseProxy {
+		return nil
+	}
+	if healthy {
+		if err := stopGhostProxyOnAddr(proxyAddr); err != nil {
+			return err
+		}
+		for i := 0; i < 10; i++ {
+			time.Sleep(150 * time.Millisecond)
+			if !proxyHealthy(proxyAddr) {
+				break
+			}
+		}
+		if proxyHealthy(proxyAddr) {
+			return fmt.Errorf("proxy at %s is still running after restart attempt (use --reuse-proxy to keep it)", proxyAddr)
+		}
+	}
+	// Always mint and use a fresh admin token for dev run startup.
+	os.Unsetenv("GHOSTPROXY_ADMIN_TOKEN")
+	return startProxy(binPath, proxyAddr, quiet)
+}
+
+func stopGhostProxyOnAddr(proxyAddr string) error {
+	port, err := proxyPort(proxyAddr)
+	if err != nil {
+		return err
+	}
+	out, err := exec.Command("lsof", "-t", "-i", "tcp:"+port, "-sTCP:LISTEN").Output()
+	if err != nil {
+		// If lsof found no listeners, treat as already stopped.
+		if _, ok := err.(*exec.ExitError); ok {
+			return nil
+		}
+		return fmt.Errorf("finding proxy pid on port %s: %w", port, err)
+	}
+
+	lines := strings.Fields(string(out))
+	if len(lines) == 0 {
+		return nil
+	}
+
+	killedAny := false
+	for _, rawPID := range lines {
+		pid, convErr := strconv.Atoi(strings.TrimSpace(rawPID))
+		if convErr != nil || pid <= 0 {
+			continue
+		}
+		cmdline, cmdErr := exec.Command("ps", "-p", rawPID, "-o", "command=").Output()
+		if cmdErr != nil {
+			continue
+		}
+		lc := strings.ToLower(string(cmdline))
+		if !strings.Contains(lc, "ghostproxy") && !strings.Contains(lc, "llm-proxy") {
+			continue
+		}
+		proc, findErr := os.FindProcess(pid)
+		if findErr != nil {
+			continue
+		}
+		_ = proc.Signal(syscall.SIGTERM)
+		killedAny = true
+	}
+	if !killedAny {
+		return fmt.Errorf("proxy port %s is already in use by a non-GhostProxy process; use --reuse-proxy to keep it", port)
+	}
+	return nil
+}
+
+func proxyPort(proxyAddr string) (string, error) {
+	addr := strings.TrimSpace(proxyAddr)
+	if addr == "" {
+		return "", fmt.Errorf("proxy address is empty")
+	}
+	if strings.HasPrefix(addr, ":") {
+		return strings.TrimPrefix(addr, ":"), nil
+	}
+	idx := strings.LastIndex(addr, ":")
+	if idx == -1 || idx == len(addr)-1 {
+		return "", fmt.Errorf("proxy address must include a port: %s", proxyAddr)
+	}
+	return addr[idx+1:], nil
 }

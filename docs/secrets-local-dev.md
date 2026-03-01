@@ -122,6 +122,8 @@ CommandGrid up --secrets-provider bitwarden --config sandbox.yaml
 CommandGrid run --secrets-provider bitwarden
 ```
 
+`CommandGrid run` manages proxy auth for local development: it restarts GhostProxy and mints a fresh admin token unless you pass `--reuse-proxy`.
+
 ---
 
 ## Summary
