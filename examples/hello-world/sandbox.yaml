@@ -4,7 +4,7 @@
 # through the llm-proxy, proving the full credential proxying flow works.
 
 sandbox_mode: docker
-image: sandbox-image:latest
+image: rootfs:latest
 
 proxy:
   addr: ":8090"

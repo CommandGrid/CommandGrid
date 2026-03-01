@@ -2,14 +2,14 @@
 # setup.sh — Bootstrap the agent sandbox system.
 #
 # Expects all three repos as sibling directories:
-#   ../llm-proxy/
-#   ../sandbox-image/
-#   ../control-plane/   (this repo)
+#   ../GhostProxy/
+#   ../RootFS/
+#   ../CommandGrid/   (this repo)
 #
 # What it does:
 #   1. Checks prerequisites (Go, Docker)
-#   2. Builds llm-proxy
-#   3. Builds the sandbox-image Docker image
+#   2. Builds GhostProxy
+#   3. Builds the rootfs Docker image
 #   4. Builds control-plane
 #   5. Walks you through adding your Anthropic API key
 #   6. Copies the hello-world example into ./my-first-sandbox/
@@ -31,8 +31,8 @@ step() { echo -e "\n${CYAN}${BOLD}--- $* ---${NC}\n"; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 
-LLM_PROXY_DIR="$PARENT_DIR/llm-proxy"
-SANDBOX_IMAGE_DIR="$PARENT_DIR/sandbox-image"
+GHOSTPROXY_DIR="$PARENT_DIR/GhostProxy"
+ROOTFS_DIR="$PARENT_DIR/RootFS"
 CONTROL_PLANE_DIR="$SCRIPT_DIR"
 
 # ─── Prerequisites ────────────────────────────────────────────────────────────
@@ -57,26 +57,26 @@ fi
 log "Docker: $(docker --version | head -1)"
 
 # Check sibling repos exist.
-[[ -d "$LLM_PROXY_DIR" ]] || fail "llm-proxy repo not found at $LLM_PROXY_DIR"
-[[ -d "$SANDBOX_IMAGE_DIR" ]] || fail "sandbox-image repo not found at $SANDBOX_IMAGE_DIR"
+[[ -d "$GHOSTPROXY_DIR" ]] || fail "GhostProxy repo not found at $GHOSTPROXY_DIR"
+[[ -d "$ROOTFS_DIR" ]] || fail "RootFS repo not found at $ROOTFS_DIR"
 
 log "All prerequisites met"
 
-# ─── Build llm-proxy ──────────────────────────────────────────────────────────
+# ─── Build GhostProxy ─────────────────────────────────────────────────────────
 
-step "Building llm-proxy"
+step "Building GhostProxy"
 
-cd "$LLM_PROXY_DIR"
+cd "$GHOSTPROXY_DIR"
 make build
-log "Built: $LLM_PROXY_DIR/build/llm-proxy"
+log "Built: $GHOSTPROXY_DIR/build/ghostproxy"
 
-# ─── Build sandbox-image ─────────────────────────────────────────────────────
+# ─── Build rootfs ────────────────────────────────────────────────────────────
 
-step "Building sandbox-image Docker image"
+step "Building rootfs Docker image"
 
-cd "$SANDBOX_IMAGE_DIR"
+cd "$ROOTFS_DIR"
 make image-local
-log "Built: sandbox-image:latest"
+log "Built: rootfs:latest"
 
 # ─── Build control-plane ─────────────────────────────────────────────────────
 
@@ -88,28 +88,7 @@ log "Built: $CONTROL_PLANE_DIR/build/control-plane"
 
 CP="$CONTROL_PLANE_DIR/build/control-plane"
 
-# ─── Store Anthropic API key ─────────────────────────────────────────────────
-
-step "Setting up credentials"
-
-# Check if the key is already stored.
-if "$CP" secrets list 2>/dev/null | grep -q "anthropic_key"; then
-    log "anthropic_key already in secret store, skipping"
-else
-    echo -e "${BOLD}Enter your Anthropic API key (starts with sk-ant-):${NC}"
-    read -rsp "> " ANTHROPIC_KEY
-    echo ""
-
-    if [[ -z "$ANTHROPIC_KEY" ]]; then
-        warn "No key entered. You can add it later with:"
-        warn "  $CP secrets add --name anthropic_key --value 'sk-ant-...'"
-    else
-        "$CP" secrets add --name anthropic_key --value "$ANTHROPIC_KEY"
-        log "Stored anthropic_key in secret store"
-    fi
-fi
-
-# ─── Copy hello-world example ────────────────────────────────────────────────
+# ─── Copy hello-world example (needed before credentials) ────────────────────
 
 step "Setting up hello-world example"
 
@@ -122,24 +101,48 @@ else
     log "Copied hello-world example to $EXAMPLE_DIR"
 fi
 
+# ─── Store Anthropic API key ─────────────────────────────────────────────────
+
+step "Setting up credentials"
+
+ENV_FILE="$EXAMPLE_DIR/.env"
+
+# Check if key is already in .env or will be set via env.
+if [[ -f "$ENV_FILE" ]] && grep -q "anthropic_key=" "$ENV_FILE" 2>/dev/null; then
+    log "anthropic_key already in .env, skipping"
+elif [[ -n "${SECRET_ANTHROPIC_KEY:-}" ]]; then
+    log "SECRET_ANTHROPIC_KEY already set, skipping"
+else
+    echo -e "${BOLD}Enter your Anthropic API key (starts with sk-ant-):${NC}"
+    read -rsp "> " ANTHROPIC_KEY
+    echo ""
+
+    if [[ -z "$ANTHROPIC_KEY" ]]; then
+        warn "No key entered. Add to .env or export SECRET_ANTHROPIC_KEY before running."
+    else
+        echo "anthropic_key=$ANTHROPIC_KEY" >> "$ENV_FILE"
+        log "Added anthropic_key to $ENV_FILE"
+    fi
+fi
+
 # ─── Done ─────────────────────────────────────────────────────────────────────
 
 step "Setup complete"
 
 echo -e "
 ${BOLD}What just happened:${NC}
-  - Built llm-proxy, sandbox-image, and control-plane
-  - Stored your Anthropic API key in ~/.config/control-plane/secrets/
+  - Built GhostProxy, rootfs, and control-plane
+  - Added Anthropic API key to my-first-sandbox/.env (or set SECRET_ANTHROPIC_KEY)
   - Created my-first-sandbox/ with a ready-to-run example
 
 ${BOLD}To run the hello-world example:${NC}
 
-  ${CYAN}# Terminal 1: start the LLM proxy${NC}
-  $LLM_PROXY_DIR/build/llm-proxy -addr :8090
+  ${CYAN}# Terminal 1: start GhostProxy${NC}
+  $GHOSTPROXY_DIR/build/ghostproxy -addr :8090
 
-  ${CYAN}# Terminal 2: boot the sandbox${NC}
+  ${CYAN}# Terminal 2: boot the sandbox (uses .env by default)${NC}
   cd $EXAMPLE_DIR
-  $CP up --name hello-world
+  $CP up --name hello-world --secrets-provider env --secrets-dir .env
 
   ${CYAN}# When done:${NC}
   $CP status

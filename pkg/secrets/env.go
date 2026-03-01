@@ -97,9 +97,13 @@ func (s *EnvStore) List() ([]string, error) {
 }
 
 // loadEnvFile reads a KEY=VALUE file into the data map.
+// If the file does not exist, it returns nil (file is optional).
 func (s *EnvStore) loadEnvFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	defer f.Close()

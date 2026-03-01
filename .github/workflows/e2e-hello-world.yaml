@@ -1,0 +1,88 @@
+name: E2E Hello World
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CommandGrid
+        uses: actions/checkout@v4
+
+      - name: Checkout GhostProxy
+        uses: actions/checkout@v4
+        with:
+          repository: Travbz/GhostProxy
+          path: GhostProxy
+
+      - name: Checkout RootFS
+        uses: actions/checkout@v4
+        with:
+          repository: Travbz/RootFS
+          path: RootFS
+
+      - name: Checkout FlowSpec
+        uses: actions/checkout@v4
+        with:
+          repository: Travbz/FlowSpec
+          path: FlowSpec
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build local runtime image
+        run: docker build -t rootfs:latest .
+        working-directory: RootFS
+
+      - name: CommandGrid build
+        run: |
+          go run . build \
+            --workspace-root "$(pwd)" \
+            --commandgrid-dir "$(pwd)" \
+            --ghostproxy-dir "$(pwd)/GhostProxy" \
+            --rootfs-dir "$(pwd)/RootFS"
+
+      - name: CommandGrid onboard
+        run: |
+          ./build/control-plane onboard \
+            --workspace-root "$(pwd)" \
+            --non-interactive \
+            --secrets-provider env \
+            --config examples/hello-world/sandbox.yaml
+
+      - name: Run hello-world agent path
+        env:
+          GHOSTPROXY_ADMIN_TOKEN: e2e-admin-token
+          SECRET_ANTHROPIC_KEY: sk-ant-test-key-e2e
+        run: |
+          set -euo pipefail
+          ./build/control-plane run \
+            --auto-build=false \
+            --config examples/hello-world/sandbox.yaml \
+            --name ci-hello \
+            --secrets-provider env \
+            --detach
+          ./build/control-plane status | tee /tmp/status.txt
+          grep -q "ci-hello" /tmp/status.txt
+
+      - name: Run FlowSpec echo workflow
+        working-directory: FlowSpec/workflows/echo
+        run: |
+          set -euo pipefail
+          echo '{"task_id":"e2e","prompt":"hello"}' | go run . > /tmp/workflow-out.json
+          grep -q '"status":"completed"' /tmp/workflow-out.json
+
+      - name: Teardown sandbox
+        if: always()
+        run: |
+          id="$(docker ps -a --filter name=ci-hello --format '{{.ID}}' | head -1)"
+          if [ -n "$id" ]; then
+            ./build/control-plane down --id "$id"
+          fi

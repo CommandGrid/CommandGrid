@@ -8,7 +8,7 @@ import (
 
 const validConfig = `
 sandbox_mode: docker
-image: ghcr.io/myorg/sandbox-image:latest
+image: ghcr.io/myorg/rootfs:latest
 
 proxy:
   addr: ":8090"
@@ -49,7 +49,7 @@ func TestLoad_ValidConfig(t *testing.T) {
 	if cfg.SandboxMode != "docker" {
 		t.Errorf("SandboxMode = %q, want %q", cfg.SandboxMode, "docker")
 	}
-	if cfg.Image != "ghcr.io/myorg/sandbox-image:latest" {
+	if cfg.Image != "ghcr.io/myorg/rootfs:latest" {
 		t.Errorf("Image = %q", cfg.Image)
 	}
 	if cfg.Agent.Command != "claude" {

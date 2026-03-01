@@ -4,7 +4,7 @@
 #
 # Prerequisites:
 #   1. Docker is running
-#   2. The sandbox-image is built: (cd ../sandbox-image && docker build -t sandbox-image:latest .)
+#   2. The rootfs image is built: (cd ../RootFS && docker build -t rootfs:latest .)
 #   3. The llm-proxy binary is built: (cd ../llm-proxy && make build)
 #   4. The control-plane binary is built: make build
 #
@@ -52,24 +52,22 @@ docker info >/dev/null 2>&1 || fail "Docker daemon not running"
 [[ -f "$CP_BIN" ]] || fail "control-plane binary not found at $CP_BIN (run: make build)"
 [[ -f "$PROXY_BIN" ]] || fail "llm-proxy binary not found at $PROXY_BIN (run: cd ../llm-proxy && make build)"
 
-docker image inspect sandbox-image:latest >/dev/null 2>&1 || \
-    fail "sandbox-image:latest not found (run: cd ../sandbox-image && make image-local)"
+docker image inspect rootfs:latest >/dev/null 2>&1 || \
+    fail "rootfs:latest not found (run: cd ../RootFS && make image-local)"
 
 log "Prerequisites OK"
 
-# ─── Step 1: Add test secrets ─────────────────────────────────────────────────
+# ─── Step 1: Create test secrets (.env for env provider) ───────────────────────
 
-log "Adding test secrets..."
+log "Creating test secrets..."
 
-"$CP_BIN" secrets add --secrets-dir "$SECRETS_DIR" --name anthropic_key --value "sk-ant-test-key-e2e"
-"$CP_BIN" secrets add --secrets-dir "$SECRETS_DIR" --name github_token --value "ghp_test_token_e2e"
-"$CP_BIN" secrets add --secrets-dir "$SECRETS_DIR" --name ssh_key --value "test-ssh-key-content"
-
-# Verify secrets are stored.
-LISTED=$("$CP_BIN" secrets list --secrets-dir "$SECRETS_DIR")
-echo "$LISTED" | grep -q "anthropic_key" || fail "anthropic_key not in secret store"
-echo "$LISTED" | grep -q "github_token" || fail "github_token not in secret store"
-log "Secrets stored OK"
+ENV_FILE="$SECRETS_DIR/.env"
+cat > "$ENV_FILE" << 'EOF'
+anthropic_key=sk-ant-test-key-e2e
+github_token=ghp_test_token_e2e
+ssh_key=test-ssh-key-content
+EOF
+log "Secrets file OK"
 
 # ─── Step 2: Start the LLM proxy ─────────────────────────────────────────────
 
@@ -141,7 +139,7 @@ log "Creating Docker sandbox..."
 # Write a test sandbox.yaml.
 cat > /tmp/e2e-sandbox.yaml << 'EOF'
 sandbox_mode: docker
-image: sandbox-image:latest
+image: rootfs:latest
 
 proxy:
   addr: ":18090"
@@ -163,7 +161,7 @@ secrets:
     env_var: GITHUB_TOKEN
 EOF
 
-"$CP_BIN" up --config /tmp/e2e-sandbox.yaml --name e2e-sandbox --secrets-dir "$SECRETS_DIR" && \
+"$CP_BIN" up --config /tmp/e2e-sandbox.yaml --name e2e-sandbox --secrets-provider env --secrets-dir "$ENV_FILE" && \
     log "Sandbox created and started OK" || \
     warn "Sandbox creation may have failed (expected if Docker socket permissions differ)"
 
@@ -182,6 +180,6 @@ echo ""
 log "════════════════════════════════════════════════════════"
 log "  E2E test complete"
 log "  Proxy: session registration, auth, revocation ✓"
-log "  Secrets: add, list ✓"
+log "  Secrets: env provider ✓"
 log "  Docker sandbox: create, start ✓"
 log "════════════════════════════════════════════════════════"

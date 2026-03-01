@@ -10,7 +10,6 @@ import (
 
 	"control-plane/pkg/config"
 	"control-plane/pkg/orchestrator"
-	"control-plane/pkg/secrets"
 )
 
 // Serve implements the "serve" subcommand: run the control plane as an HTTP server.
@@ -20,7 +19,8 @@ func Serve(args []string, logger *log.Logger) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", ":8091", "HTTP listen address")
 	configPath := fs.String("config", "sandbox.yaml", "Path to sandbox.yaml")
-	secretsDir := fs.String("secrets-dir", "", "Path to secrets directory")
+	secretsDir := fs.String("secrets-dir", "", "Path to .env file (env provider)")
+	secretsProvider := fs.String("secrets-provider", "env", "Secret provider: env or bitwarden")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -30,13 +30,7 @@ func Serve(args []string, logger *log.Logger) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	sDir := *secretsDir
-	if sDir == "" {
-		home, _ := userHomeDir()
-		sDir = home + "/.config/control-plane/secrets"
-	}
-
-	store, err := secrets.NewFileStore(sDir)
+	store, err := openSecretStore(*secretsProvider, *secretsDir)
 	if err != nil {
 		return fmt.Errorf("opening secret store: %w", err)
 	}

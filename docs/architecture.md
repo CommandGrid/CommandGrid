@@ -137,7 +137,6 @@ pkg/
 ├── config/          # sandbox.yaml parsing + validation
 ├── secrets/
 │   ├── iface.go     # Store interface
-│   ├── store.go     # FileStore (JSON file)
 │   ├── env.go       # EnvStore (env vars)
 │   ├── delegated.go # DelegatedStore (AWS SM / Vault)
 │   └── session.go   # Session token generation
@@ -163,7 +162,6 @@ cmd/
 ├── up.go           # CLI: sandbox up
 ├── down.go         # CLI: sandbox down
 ├── status.go       # CLI: sandbox status
-├── secrets.go      # CLI: secrets add/list/remove
 ├── serve.go        # HTTP server mode
 └── helpers.go
 ```
