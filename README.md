@@ -16,6 +16,8 @@
   ·
   <a href="./docs/README.md">Getting Started</a>
   ·
+  <a href="./examples/hello-weather/run.sh">Hello-Weather Demo</a>
+  ·
   <a href="https://github.com/CommandGrid">Organization</a>
 </p>
 

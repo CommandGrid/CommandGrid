@@ -100,6 +100,7 @@ Notes:
 - Requires `bw` CLI installed and authenticated/unlocked
 - Uses `BW_SESSION` when present
 - Resolves item values from `login.password` first, then `notes`
+- Returns a clear unlock hint when `bw` emits an interactive prompt instead of JSON
 
 ## How the orchestrator uses it
 

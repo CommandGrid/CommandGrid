@@ -126,7 +126,7 @@ Put secrets in a `.env` file (e.g. `anthropic_key=sk-ant-...`) or export `SECRET
 
 **Use `control-plane run`** — in local dev it restarts GhostProxy by default and mints a fresh admin token, so you don't have to manually sync `GHOSTPROXY_ADMIN_TOKEN` across processes. Use `--reuse-proxy` only when you intentionally want to keep an external proxy process.
 
-### Hello world
+### Hello world agent
 
 ```bash
 cd examples/hello-world
@@ -143,6 +143,21 @@ What this does:
 4. Agent script calls Anthropic through the proxy
 5. Proxy swaps token for real key, forwards to Anthropic
 6. Claude responds. Real API key never entered the container.
+
+### Hello weather workflow (proxy mode)
+
+Use the workflow demo runner to execute `FlowSpec/workflows/hello-weather`
+through GhostProxy with Bitwarden-backed secret resolution:
+
+```bash
+cd examples/hello-weather
+export BW_SESSION="$(bw unlock --raw)"
+./run.sh
+```
+
+`run.sh` builds the workflow binary for Linux (if needed), starts GhostProxy,
+boots the sandbox via `up --secrets-provider bitwarden`, tails workflow logs,
+and cleans up on exit.
 
 ---
 
@@ -212,6 +227,7 @@ When a proxied secret is configured, CommandGrid injects two env vars per provid
 |---|---|---|
 | Anthropic | `ANTHROPIC_API_KEY` (session token) | `ANTHROPIC_BASE_URL` (proxy URL) |
 | OpenAI | `OPENAI_API_KEY` (session token) | `OPENAI_BASE_URL` (proxy URL) |
+| MiniMax | `MINIMAX_API_KEY` (session token) | `MINIMAX_BASE_URL` (proxy URL) |
 | Ollama | `OLLAMA_API_KEY` (session token) | `OLLAMA_HOST` (proxy URL) |
 
 Standard SDKs read these env vars and route through the proxy automatically. No code changes needed in the agent.
@@ -460,7 +476,22 @@ secrets from Bitwarden via `bw` CLI (expects login/unlock state and optionally
 
 ### Troubleshooting
 
-**"proxy-mode secrets require GHOSTPROXY_ADMIN_TOKEN"** — This usually means you're using `up`/`serve` against a separately managed proxy. For local development, prefer `control-plane run` (it restarts the proxy and reissues the admin token automatically). If you intentionally manage proxy lifecycle yourself, set `GHOSTPROXY_ADMIN_TOKEN` to the same value in both GhostProxy and CommandGrid, or pass `--reuse-proxy` on `run`.
+**"proxy-mode secrets require GHOSTPROXY_ADMIN_TOKEN"** — `up` now self-heals once in local dev by restarting GhostProxy and minting a fresh admin token, then retrying startup. If you intentionally manage proxy lifecycle yourself, ensure both processes share the same `GHOSTPROXY_ADMIN_TOKEN`, or use `run --reuse-proxy`.
+
+**"parsing bitwarden response: invalid character '?' looking for beginning of value"** — Bitwarden CLI returned an interactive unlock/login prompt instead of JSON. Unlock in the same shell and export a session:
+
+```bash
+export BW_SESSION="$(bw unlock --raw)"
+```
+
+If needed, verify unlock state:
+
+```bash
+bw status
+bw list items --search anthropic_key --session "$BW_SESSION"
+```
+
+**Docker name conflict (`container name ... already in use`)** — `up` now auto-evicts stale managed containers for the same sandbox name and retries once.
 
 ### Running as a server
 
@@ -524,7 +555,11 @@ CommandGrid/
 │   └── customer/
 │       └── profile.go               # customer profile + secret provider config
 ├── examples/
-│   └── hello-world/
+│   ├── hello-world/
+│   │   ├── sandbox.yaml
+│   │   ├── agent.sh
+│   │   └── run.sh
+│   └── hello-weather/
 │       ├── sandbox.yaml
 │       ├── agent.sh
 │       └── run.sh

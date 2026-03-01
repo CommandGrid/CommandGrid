@@ -32,7 +32,7 @@ Use `mode = "proxy"` for credentials where:
 - You want an audit point for all usage (the proxy sees every request)
 - The service has a standard HTTP API that the proxy can forward
 
-Typical proxy mode credentials: Anthropic API keys, OpenAI API keys, Ollama (even though it doesn't need auth, routing through the proxy gives you visibility).
+Typical proxy mode credentials: Anthropic API keys, OpenAI API keys, MiniMax API keys, Ollama (even though it doesn't need auth, routing through the proxy gives you visibility).
 
 ### When to use inject mode
 
@@ -97,6 +97,7 @@ When a secret is in `proxy` mode, the orchestrator automatically sets the correc
 |---|---|---|
 | `anthropic` | `ANTHROPIC_BASE_URL` | `http://host.docker.internal:8090` |
 | `openai` | `OPENAI_BASE_URL` | `http://host.docker.internal:8090` |
+| `minimax` | `MINIMAX_BASE_URL` | `http://host.docker.internal:8090` |
 | `ollama` | `OLLAMA_HOST` | `http://host.docker.internal:8090` |
 
 These env var names are the ones each SDK looks for out of the box. No agent-side configuration needed.

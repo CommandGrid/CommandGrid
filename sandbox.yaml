@@ -32,6 +32,12 @@ secrets:
     provider: anthropic
     # upstream_url: https://api.anthropic.com  # Optional override
 
+  # minimax_key:
+  #   mode: proxy
+  #   env_var: MINIMAX_API_KEY
+  #   provider: minimax
+  #   # upstream_url: https://api.minimax.chat  # Optional override
+
   # github_token:
   #   mode: inject
   #   env_var: GITHUB_TOKEN

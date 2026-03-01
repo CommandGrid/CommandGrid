@@ -112,7 +112,7 @@ Each secret is a named section under `[secrets]`. The key (e.g., `anthropic_key`
 |---|---|---|---|---|
 | `mode` | string | yes | -- | `"proxy"` or `"inject"` |
 | `env_var` | string | yes | -- | Environment variable name in the sandbox |
-| `provider` | string | proxy only | -- | LLM provider: `"anthropic"`, `"openai"`, `"ollama"` |
+| `provider` | string | proxy only | -- | LLM provider: `"anthropic"`, `"openai"`, `"minimax"`, `"ollama"` |
 | `upstream_url` | string | no | -- | Override the provider's default upstream URL |
 
 ### [[shared_dirs]]

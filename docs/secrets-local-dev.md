@@ -27,6 +27,7 @@ Set `SECRET_` + uppercase secret name. Names use underscores.
 |--------------------------|----------------|
 | `anthropic_key` | `SECRET_ANTHROPIC_KEY` |
 | `openai_key` | `SECRET_OPENAI_KEY` |
+| `minimax_key` | `SECRET_MINIMAX_KEY` |
 | `github_token` | `SECRET_GITHUB_TOKEN` |
 
 ```bash
@@ -42,6 +43,7 @@ Create a `.env` file in your project directory (add to `.gitignore`). Use the **
 # .env - keys must match secret names in sandbox.yaml
 anthropic_key=sk-ant-...
 openai_key=sk-...
+minimax_key=your-minimax-api-key
 github_token=ghp_...
 ```
 
@@ -49,7 +51,7 @@ github_token=ghp_...
 CommandGrid up --secrets-provider env --config sandbox.yaml
 ```
 
-By default, the env provider looks for `.env` in the current directory. Use `--secrets-dir /path/to/.env` to specify a different file. Env vars override values from the `.env` file.
+By default, the env provider now resolves a populated `.env` at the repository root and returns a clear error if it is missing/empty. Use `--secrets-dir /path/to/.env` to specify a different file. Env vars override values from the `.env` file.
 
 ---
 
@@ -63,9 +65,16 @@ Use Bitwarden as the secret store. Requires `bw` CLI and an unlocked session.
 2. Log in: `bw login`
 3. Unlock and export session:
    ```bash
-   bw unlock
-   export BW_SESSION="<session-token-from-unlock>"
+   export BW_SESSION="$(bw unlock --raw)"
    ```
+
+If you see a parse error like `invalid character '?' looking for beginning of value`,
+the vault is still locked in that shell. Re-run the unlock command and verify:
+
+```bash
+bw status
+bw list items --search anthropic_key --session "$BW_SESSION"
+```
 
 ### How to store secrets in Bitwarden
 
@@ -86,6 +95,7 @@ Use the **exact** secret name from your `sandbox.yaml`. Lowercase with underscor
 |--------------------------|---------------------|
 | `anthropic_key` | `anthropic_key` |
 | `openai_key` | `openai_key` |
+| `minimax_key` | `minimax_key` |
 | `github_token` | `github_token` |
 
 Do **not** use env-style names like `ANTHROPIC_KEY`. The lookup is by item name, not env var.
@@ -123,6 +133,8 @@ CommandGrid run --secrets-provider bitwarden
 ```
 
 `CommandGrid run` manages proxy auth for local development: it restarts GhostProxy and mints a fresh admin token unless you pass `--reuse-proxy`.
+
+`CommandGrid up` now also self-heals once for proxy token drift by restarting GhostProxy and retrying startup.
 
 ---
 
