@@ -49,7 +49,7 @@ github_token=ghp_...
 CommandGrid up --secrets-provider env --config sandbox.yaml
 ```
 
-By default, the env provider looks for `.env` in the current directory. Use `--secrets-dir /path/to/.env` to specify a different file. Env vars override values from the `.env` file.
+By default, the env provider now resolves a populated `.env` at the repository root and returns a clear error if it is missing/empty. Use `--secrets-dir /path/to/.env` to specify a different file. Env vars override values from the `.env` file.
 
 ---
 
@@ -63,9 +63,16 @@ Use Bitwarden as the secret store. Requires `bw` CLI and an unlocked session.
 2. Log in: `bw login`
 3. Unlock and export session:
    ```bash
-   bw unlock
-   export BW_SESSION="<session-token-from-unlock>"
+   export BW_SESSION="$(bw unlock --raw)"
    ```
+
+If you see a parse error like `invalid character '?' looking for beginning of value`,
+the vault is still locked in that shell. Re-run the unlock command and verify:
+
+```bash
+bw status
+bw list items --search anthropic_key --session "$BW_SESSION"
+```
 
 ### How to store secrets in Bitwarden
 
@@ -123,6 +130,8 @@ CommandGrid run --secrets-provider bitwarden
 ```
 
 `CommandGrid run` manages proxy auth for local development: it restarts GhostProxy and mints a fresh admin token unless you pass `--reuse-proxy`.
+
+`CommandGrid up` now also self-heals once for proxy token drift by restarting GhostProxy and retrying startup.
 
 ---
 
